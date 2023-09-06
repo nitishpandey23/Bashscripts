@@ -1,0 +1,141 @@
+##Step:1------Script for restarting the mysql server when website get 504 error
+
+#!/bin/bash
+
+# Enable debugging
+set -x
+
+# URL to check
+URL="http://example.com"
+
+# Log file path
+LOG_FILE="/var/log/website_monitor.log"
+
+# Function to check the website for a 504 error
+check_website() {
+    # Use curl to make a request to the URL
+    response=$(curl -Is "$URL" | head -n 1)
+
+    # Check if the response contains "HTTP/1.1 504"
+    if [[ "$response" == *"HTTP/1.1 504"* ]]; then
+        return 0  # Website returned a 504 error
+    else
+        return 1  # Website did not return a 504 error
+    fi
+}
+
+# Function to restart MySQL service
+restart_mysql() {
+    echo "Restarting MySQL service..."
+    sudo systemctl restart mysql
+    echo "MySQL service restarted."
+}
+
+# Function to empty the log file
+empty_log_file() {
+    truncate -s 0 "$LOG_FILE"
+    echo "Log file emptied."
+}
+
+# Create the log file if it doesn't exist
+if [ ! -f "$LOG_FILE" ]; then
+    touch "$LOG_FILE"
+fi
+
+# Redirect output to the log file
+exec >> "$LOG_FILE" 2>&1
+
+# Main loop
+while true; do
+    if check_website; then
+        echo "Detected a 504 error on $URL"
+        restart_mysql
+    else
+        echo "Website $URL is accessible."
+    fi
+
+    # Empty the log file every 24 hours (86400 seconds)
+    if (( $(date +%s) % 86400 == 0 )); then
+        empty_log_file
+    fi
+
+    # Sleep for a while before checking again (e.g., 5 minutes)
+    sleep 1
+done
+
+
+
+##Step:2---- Now set a service to run this script always to check the website is running or not and take action against that
+
+
+To run the script automatically on a server, you can set it up as a systemd service. Here's a step-by-step guide on how to do this:
+
+1. **Create the Script**:
+
+   First, create the script as mentioned in the previous response and save it to a suitable location on your server. For example, you can save it in `/usr/local/bin`:
+
+   ```bash
+   sudo nano /usr/local/bin/monitor_website.sh
+   ```
+
+   Paste the script contents into this file, save, and exit the text editor.
+
+2. **Make the Script Executable**:
+
+   Ensure that the script is executable by running:
+
+   ```bash
+   sudo chmod +x /usr/local/bin/monitor_website.sh
+   ```
+
+3. **Create a systemd Service Unit**:
+
+   Create a systemd service unit file that will define how your script should be managed by systemd:
+
+   ```bash
+   sudo nano /etc/systemd/system/monitor-website.service
+   ```
+
+   Add the following content to the file:
+
+   ```ini
+   [Unit]
+   Description=Monitor gkpotical.com and restart MySQL on 504 error
+
+   [Service]
+   ExecStart=/usr/local/bin/monitor_website.sh
+   Restart=always
+
+   [Install]
+   WantedBy=multi-user.target
+   ```
+
+   Save and exit the text editor.
+
+4. **Enable the Service**:
+
+   To enable the systemd service and have it start automatically at boot:
+
+   ```bash
+   sudo systemctl enable monitor-website.service
+   ```
+
+5. **Start the Service**:
+
+   You can manually start the service with:
+
+   ```bash
+   sudo systemctl start monitor-website.service
+   ```
+
+   You should also check the status of the service to ensure it's running as expected:
+
+   ```bash
+   sudo systemctl status monitor-website.service
+   ```
+
+6. **Adjust Sleep Duration (Optional)**:
+
+   You can modify the sleep duration in your script by editing the `/usr/local/bin/monitor_website.sh` file. Adjust the `sleep` duration according to your monitoring requirements.
+
+With these steps, your script will be managed by systemd as a service, and it will run automatically on server startup and continue running in the background, periodically checking the website for a 504 error and restarting MySQL when necessary. You can also manually control the service using `systemctl` commands like `start`, `stop`, and `restart`.
